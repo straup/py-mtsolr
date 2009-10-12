@@ -11,49 +11,30 @@ class mtsolr  :
         self.host = host
         self.port = port
         self.endpoint = endpoint
-        
+
     def add (self, tags) :
 
         docs = []
         
         for tag in tags :
-            id = 'mt-%s' % uuid.uuid4()
 
-            # FIX ME: escaping and shit
-            
-            docid = tag['documentid']
-            ns = tag['namespace']
-            pred = tag['predicate']
-            value = tag['value']
-
-            # ugh...
-            
-            try :
-                docid_l = long(tag['documentid'])
-            except :
-                docid_l = 0
+            tag['uuid'] = 'mt-%s' % uuid.uuid4()
 
             try :
-                value_f = float(tag['value'])
+                tag['value_float'] = float(tag['value'])
             except :
-                value_f = 0.0
+                pass
 
-            #
-            
-            doc =  """<doc>
-            <field name="uuid">%s</field>
-            <field name="documentid">%s</field>
-            <field name="documentid_l">%s</field>            
-            <field name="namespace">%s</field>
-            <field name="predicate">%s</field>
-            <field name="value">%s</field>
-            <field name="value_f">%s</field>            
-            </doc>""" % (id, docid, docid_l, ns, pred, value, value_f)
+            fields = []
 
-            docs.append(doc)
+            for k,v in tag.items() :
+                # FIX ME: escape k, v
+                fields.append("""<field name="%s">%s</field>""" % (k, v))
+
+            docs.append("<doc>%s</doc>" % "".join(fields))
             
         data = "<add>%s</add>" % "".join(docs)
-        
+
         if not self._add(data) :
             return None
         
@@ -131,7 +112,7 @@ class mtsolr  :
         if value :
             q.append('value:%s' % value)
 
-        return self.faceted_search('documentid', q)
+        return self.faceted_search('document_id', q)
 
     def search (self, args) :
 
@@ -158,9 +139,13 @@ class mtsolr  :
         if not res :
             return None
 
-        raw = res['facet_counts']['facet_fields'][facet]
-        idx = range(0, len(raw), 2)
-
+        try :
+            raw = res['facet_counts']['facet_fields'][facet]
+            idx = range(0, len(raw), 2)
+        except Exception, e :
+            logging.error('Failed to parse response: %s' % e)
+            return None
+        
         facets = {}
         
         for i in idx :
@@ -262,7 +247,7 @@ if __name__ == '__main__' :
     ns = mt.documents('upcoming')
     print ns
     
-    uuid = mt.add([{'documentid' : 12342323, 'namespace' : 'upcoming', 'predicate' : 'event', 'value' : docid}])    
+    uuid = mt.add([{'document_id' : 12342323, 'namespace' : 'upcoming', 'predicate' : 'event', 'value' : docid}])    
     print uuid
     
     ns = mt.documents('upcoming')

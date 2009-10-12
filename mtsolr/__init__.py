@@ -1,7 +1,8 @@
-import simplejson
 from httplib import HTTPConnection
+import simplejson
 import urllib
 import uuid
+import logging
 
 class mtsolr  :
     
@@ -24,29 +25,63 @@ class mtsolr  :
             ns = tag['namespace']
             pred = tag['predicate']
             value = tag['value']
-        
+
+            # ugh...
+            
+            try :
+                docid_l = long(tag['documentid'])
+            except :
+                docid_l = 0
+
+            try :
+                value_f = float(tag['value'])
+            except :
+                value_f = 0.0
+
+            #
+            
             doc =  """<doc>
             <field name="uuid">%s</field>
             <field name="documentid">%s</field>
+            <field name="documentid_l">%s</field>            
             <field name="namespace">%s</field>
             <field name="predicate">%s</field>
             <field name="value">%s</field>
-            </doc>""" % (id, docid, ns, pred, value)
+            <field name="value_f">%s</field>            
+            </doc>""" % (id, docid, docid_l, ns, pred, value, value_f)
 
             docs.append(doc)
             
         data = "<add>%s</add>" % "".join(docs)
-
-        print data
         
-        if not self._update(data) :
+        if not self._add(data) :
             return None
         
         if not self._commit() :
             return None
 
         return id
+
+    def delete (self, uuid) :
+
+        if not self._delete(uuid) :
+            return False
+
+        if not self._commit() :
+            return False
+
+        return True
     
+    def purge (self) :
+
+        if not self._purge() :
+            return False
+
+        if not self._commit() :
+            return False
+
+        return True
+        
     def namespaces(self, predicate=None, value=None) :
 
         q = []
@@ -100,9 +135,13 @@ class mtsolr  :
 
     def search (self, args) :
 
-        res = self.execute_request('/select', args)
-        # FIX ME
-        
+        res = self._select(args)
+
+        if res : 
+            return res['response']
+
+        return None
+    
     def faceted_search (self, facet, q=[], args={}) :
 
         q.append('uuid:mt-*')
@@ -135,22 +174,46 @@ class mtsolr  :
         query = "?%s" % urllib.urlencode(args)
 
         rsp = self._execute_request('GET', '/select', query)
+
+        if not rsp :
+            return None
+
+        raw = rsp.read()
+        # print raw
         
         try :
-            json = simplejson.loads(rsp.read())
+            json = simplejson.loads(raw)
         except Exception, e:
-            print e
+            logging.error('failed to parse JSON: %s' % e)
             return None
 
         return json
 
-    def _update (self, data) :
+    def _add (self, data) :
 
         if self._execute_request('POST', '/update', data, {'Content-type': 'text/xml'}) :
             return True
 
         return False
-    
+
+    def _delete (self, uuid) :
+
+        xml = "<delete><id>%s</id></delete>" % uuid
+        
+        if self._execute_request('POST', '/update', xml, {'Content-type': 'text/xml'}) :
+            return True
+
+        return False
+
+    def _purge (self) :
+
+        xml = "<delete><query>*:*</query></delete>"
+        
+        if self._execute_request('POST', '/update', xml, {'Content-type': 'text/xml'}) :
+            return True
+
+        return False
+        
     def _commit (self) :
 
         if self._execute_request('POST', '/update', '<commit />', {'Content-type': 'text/xml'}) :
@@ -158,6 +221,8 @@ class mtsolr  :
 
         return False
 
+    # http://wiki.apache.org/solr/SolrAndHTTPCaches
+    
     def _execute_request(self, method, path, body=None, headers={}):
 
         url = self.endpoint + path
@@ -173,21 +238,47 @@ class mtsolr  :
             response = conn.getresponse()
             
         except Exception, e :
+            logging.error('HTTP request failed: %s' % e)
             return None
 
         if response.status != 200:
+            logging.error('HTTP response not OK: %s' % response.status)            
+            logging.error(response.read())
             return None
-            
+
         return response
 
 if __name__ == '__main__' :
 
+    import time
+    docid = int(time.time()) 
+
+    docid = str(docid) + "s"
+    
     mt = mtsolr('localhost')
+
+    mt.purge()
+    
+    ns = mt.documents('upcoming')
+    print ns
+    
+    uuid = mt.add([{'documentid' : 12342323, 'namespace' : 'upcoming', 'predicate' : 'event', 'value' : docid}])    
+    print uuid
+    
+    ns = mt.documents('upcoming')
+    print ns
+
+    query = { 'q' : 'predicate:event'}
+    print mt.search(query)
+
+    """
+    mt.delete(uuid)
 
     ns = mt.documents('upcoming')
     print ns
-    
-    print mt.add([{'documentid' : 12342323, 'namespace' : 'upcoming', 'predicate' : 'event', 'value' : '99222129'}])    
+
+    mt.purge()
     
     ns = mt.documents('upcoming')
     print ns
+    """

@@ -1,0 +1,3 @@
+py-mtsolr is a Python wrapper for talking to a Solr server running with a schema designed to store and query machine tags.
+
+This is a work in progress.

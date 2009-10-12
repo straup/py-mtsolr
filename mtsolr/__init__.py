@@ -8,6 +8,8 @@ class mtsolr  :
     
     def __init__ (self, host, port=8983, endpoint='/solr') :
 
+        self.prefix = 'mtsolr'
+        
         self.host = host
         self.port = port
         self.endpoint = endpoint
@@ -18,7 +20,7 @@ class mtsolr  :
         
         for tag in tags :
 
-            tag['uuid'] = 'mt-%s' % uuid.uuid4()
+            tag['uuid'] = '%s-%s' % (self.prefix, uuid.uuid4())
 
             try :
                 tag['value_float'] = float(tag['value'])
@@ -125,7 +127,7 @@ class mtsolr  :
     
     def faceted_search (self, facet, q=[], args={}) :
 
-        q.append('uuid:mt-*')
+        q.append('uuid:%s-*' % self.prefix)
 
         args['q'] = ' AND '.join(q)
         args['facet.field'] = facet

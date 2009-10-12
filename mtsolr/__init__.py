@@ -20,6 +20,8 @@ class mtsolr  :
         
         for tag in tags :
 
+            # FIX ME: validate namespace and predicate here...
+            
             tag['uuid'] = '%s-%s' % (self.prefix, uuid.uuid4())
 
             try :
